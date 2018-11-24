@@ -1,0 +1,166 @@
+\startchapter{Algorithm}
+\label{chapter:algorithm}
+
+This chapter presents the algorithm created for the adaptive teaching system. We first present the basic version of the algorithm (Section \ref{chap4:basic}). We then explain the skip feature (Section \ref{chap4:skip}), which could streamline learning. \par
+
+The algorithm used is an extension of upper confidence bound (UCB)-based algorithms \cite{auer2002finite} (Section \ref{chap2:UCB}). These algorithms maintain estimates of the expected reward of each arm together with confidence bound around it. It then pulls the arm with the highest estimated reward which is equal to the sample mean plus the confidence bound. Based on the actual reward it updates the arms parameters iteratively after each pull to make a better decision in upcoming rounds. In this project we are using the most cited contextual bandit algorithm, namely LinUCB (Section \ref{chap2:linUCB}).  \par
+
+Before we dive in it is important to note, that to better understand the algorithm we have divided the explanation into two halves. \textit{The first half explains the overall flow without skipping whereas the second explains in-depth the function calls made in the first half along with skipping}. We are using bandit terminology to explain. \textbf{Arm} refers to a content item. \textbf{Payoff} is the algorithms upwardly biased estimate of the expected reward, where the bias is due to the algorithms use of an upper confidence bound rather than using the sample mean directly. A \textbf{round} comprises of computing the expected payoff for each content item; then presenting a content item with maximum expected payoff and getting student feedback for the content item. \par
+
+Below are the notations used in the algorithm.
+
+\begin{table}[H]
+\centering
+\label{Table 1 : Notations}
+\begin{tabularx}{\linewidth}{ @{} r X @{} }
+     \hline
+     Symbol & Meaning \\
+     \hline
+     $\alpha$  & Parameter to scale Confidence bound.  \\ 
+     $C$ & Confidence threshold to skip. \\
+     $\mathbf{x_s}$ & Student context vector. \\
+     ${x_c}$ & Content items context matrix for a topic. \\
+     $\mathbf{x_t}$ & Context vector at round $t$. \\
+     $X_{t}$ / $X^{i}_{t}$  & Context at round $t$. It combines $\mathbf{x_s}$ and all available $x_c$ for topic $i$. \\
+     $X^{i+1}_{t}$  & Context at round $t$. It combines $\mathbf{x_s}$ and all available $x^{i+1}_c$ for topic $i+1$. \\
+     $x^{i+1}_c$ & Content items contexts for topic $i+1$. \\
+     $a$ & An arm $a$ for topic $i$.\\
+     $a'$ & An arm $a'$ for topic $i+1$.\\
+     $A_t$ & Arms available at round $t$. \\
+     $A^{i+1}_{t'}$ & Arms available for topic $i+1$ at round $t'$. \\
+     $a^{i+1}_t$ & Arm $a$ for topic $i+1$ at round $t$. \\
+     $t$ & Current round $t$. \\
+     $t'$ & Possible next round $t'$. \\
+     $i$ & Topic being taught. \\
+     $i+1$ & Next Topic in the sequence. \\
+     $p_{t,a}$ & Expected payoff from arm $a$  at round $t$. \\ 
+     $p^{i}_{t,a}$ & Expected payoff from arm $a$ at round $t$ for topic $i$. \\
+     $p^{i+1}_{t',a'}$ & Expected payoff from arm $a'$ at round $t'$ for next topic $i+1$. \\
+     $X$ & Input features for skip classifier. \\
+     $Y$ & Label to train the skip classifier. \\ 
+   \hline   
+\end{tabularx}
+\caption{Algorithmic notations}
+\end{table}
+
+\textbf{Note}
+\begin{itemize}
+    \item We are always on the current topic $i$, unless we explicitly specify next topic $i+1$.
+    \item All vectors are \textbf{bold} faced lower cased.
+    \item All sets are plain faced.
+\end{itemize}
+
+\begin{algorithm}
+\caption{Teach with LinUCB}
+\begin{algorithmic}[1]
+ \State \textbf{Hyper Parameters :} $\alpha$ $\in$  $\mathbb{R_+}$
+    \State \qquad \qquad \qquad \qquad \qquad \, $C$ : Confidence threshold to skip 
+    \State \textbf{Inputs :} Student context $\mathbf{x_s}$ and content context $x_c$ of available arm $a \; \in A_t$ for topic $i$ at round $t$
+    \State Prepare context $X_{t} = \;\begin{pmatrix} \mathbf{x_s} \\ x_c \end{pmatrix}$
+    \State skip-enabled $\gets$ False
+    \While {$A_t \neq \emptyset$}
+    \State $a^{i}_{t}$ , $p^{i}_{t,a} \gets$ \; \Call{Expected-Payoff}{$X_{t}$,$A_t$}
+    \State skip-decision , $p^{i+1}_{t',a'} \gets$ \Call{SkipTopic}{$\mathbf{x_s}$, $p^{i}_{t,a}$, $i$}
+    \If{skip-decision and skip-enabled is True}
+    \State Move to next topic $i \gets i+1$
+    \State \textbf{break}
+    \Else 
+    \State Pull arm $a_t$ and observe reward $r_{t}$
+    \State $A_{a_t} \gets A_{a_t} + \mathbf{x_{t,a_t}x^{T}_{t,a_t}}$
+    \State \bm{$b_{a_t}$} $\gets$ \bm{$b_{a_t}$} + $r_{t}\mathbf{x_{t,a_{t}}}$
+    \State label $\gets$ \Call{setlabel}{$r_t$}
+    \State \Call{Train}{$\mathbf{x_s}$, $p^{i}_{t,a}$, $p^{i+1}_{t',a'}$,label}
+    \State $t \gets t+1$
+    \EndIf 
+    \If{$r_t \neq 1$}
+    \State Remove $a_t \; \in A_t$
+    
+    \State skip-enabled $\gets$ True
+    \Else 
+    \State Move to next topic : $i \gets i+1$
+    \State \textbf{break}
+    \EndIf 
+    \EndWhile
+    \algstore{myalg}
+\end{algorithmic}
+\end{algorithm}
+
+\section{Basic Version \label{chap4:basic}}
+
+The basic version is without skipping. It explains the main flow of the algorithm. The next section explains the functions used along with skipping. \par
+
+The algorithm requires two hyper-parameters to be configured. The first one is $\alpha$ which scales the confidence bound (Section \ref{chap2:linUCB}). The second hyper-parameter is the confidence threshold $C$ which decides confidence threshold that must be exceeded to skip a topic. Skipping is a feature to help students who are unlikely to learn from content items available for a topic. It is meant to streamline learning. This could also be used by teachers to recognize topics that should be addressed in class. \par
+
+We now explain how LinUCB (Section \ref{chap2:linUCB}) helps the algorithm decide an arm to pull. Before we recommend a content item to a student, we need to prepare context $X_t$ for the round $t$. It is prepared by combining the student context $\mathbf{x_s}$ with content items context $x_c$ for the topic $i$ being taught. With the context $X_t$ and arms $A_t$, we use LinUCB to compute the expected payoff from each arm and return the arm $a^{i}_t$ with the maximum expected payoff $p^{i}_{t,a}$ which must be pulled for topic $i$ at round $t$. \par 
+
+Assuming the classifier does not recommend skipping, a student is presented with the content item $a_t$ for topic $i$. After being taught the student sends a reward $r_t$ to complete the round $t$. Now the round $t$ is complete we update the arm parameters $A_{a_t}$ , $\mathbf{b_{a_t}}$ of the arm pulled. We then use this reward ${r_t}$ to train the skip classifier to make better predictions in upcoming rounds. The features for the classifier comprise of a student's contextual information $\mathbf{x_s}$, expected payoff $p^{i}_{t,a}$ from the current topic $i$ and the expected payoff $p^{i+1}_{t',a'}$ for the topic $i+1$. \par
+
+If no reward $r_t$ was sent by the student $\mathbf{x_s}$, then it implies the student was unable to understand topic $i$. In which case the algorithm removes the presented arm $a_t$ and remains on the same topic $i$. However if a reward $r_t$ was sent, then the student is moved to the next topic $i+1$. This completes the first half. The second half explains the functions briefly described above. \par
+
+\section{With Skipping \label{chap4:skip}}
+
+\begin{algorithm}                     
+\begin{algorithmic} [1]                   % enter the algorithmic environment
+\algrestore{myalg}
+    \Function{SkipTopic}{$x_s$, $p^{i}_{t,a}$, $i$}
+        \State Get next topic $i+1$ from topic $i$
+        \State Get arms $A^{i+1}_{t'}$ and content context $x^{i+1}_{c}$ for topic $i+1$ 
+        \State Prepare context vector $X^{i+1}_{t'} =\; \begin{pmatrix} x_s \\ x^{i+1}_{c} \end{pmatrix}$
+        \State $a^{i+1}_{t'}$ , $p^{i+1}_{t',a'} \gets$ \Call {expected-payoff}{$X^{i+1}_{t'}$,$A^{i+1}_{t'}$}
+        \State skip-decision $\gets$ \Call{predict}{$x_s$, $p^{i}_{t,a}$, $p^{i+1}_{t',a'}$} to decide on skip
+        \State \Return skip-decision , $p^{i+1}_{t',a'}$
+    \EndFunction
+    
+    \Function{expected-payoff}{$X_t$,$A_t$}
+        \For {$a\; \in\; A_t\;$} 
+        \State Get $x_{t,a}\; \in \; X_t$
+            \If {$a$ is new}
+                \State $A_a \gets I_d$ (d-dimensional identify matrix)
+                \State \bm{$b_a$} $\gets 0_{d \times 1}$ (d-dimensional zero vector)
+            \EndIf
+            \State $\widehat{\theta}_a \gets A^{-1}_{a}b_a $
+            \State $p_{t,a} \gets \widehat{\theta}^{T}_{a}x_{t,a} + \alpha \sqrt{x^{T}_{t,a}A^{-1}_{a}x_{t,a}}$
+        \EndFor
+        \State Choose arm $a_{t}$ = arg max$_{a \in A_t} p_{t,a}$ with ties broken arbitrarily
+        \State \Return $a_t , arg max p_{t,a}, $
+    \EndFunction
+    
+    \Function{predict}{$x_s$, $p^{i}_{t,a}$, $p^{i+1}_{t',a'}$}
+        \State X $\gets {x_s} \; , ${i+1}$ \; , p^{i}_{t,a} \; , p^{i+1}_{t',a'}$
+        \State Y , confidence-score $\gets$ Prediction \; from \; classifier
+        \If{confidence-score \textless C}
+        \State decision $\gets$ 0
+        \EndIf
+        \State \Return \; decision , confidence-score
+    \EndFunction
+    
+    \Function{train}{$x_s$, $p^{i}_{t,a}$, $p^{i+1}_{t',a'}$, label}
+        \State $X \gets x_s , p^{i}_{t,a} , p^{i+1}_{t',a'} $ , topic ,
+        \State $Y \gets$ label
+        \State Train online SGD classifier
+    \EndFunction
+    
+    \Function{setLabel}{$r_t$}
+        \If{$r_t$ is 0}
+        \State $label \gets 1$
+        \Else
+        \State $label \gets 0$
+        \EndIf
+        \State \Return label
+    \EndFunction
+    
+\end{algorithmic}
+\end{algorithm}
+
+On line 6 (Section \ref{chap4:basic}) of the algorithm we get the expected payoff $p^{i}_{t,a}$ estimated on pulling the arm $a^{i}_t$ for the current topic $i$. Now to decide whether or not it should pull the arm or move to the next topic it calls the skip topic function. \par
+
+The \textit{SKIPTOPIC} function takes the student context $\mathbf{x_s}$, the expected payoff $p^{i}_{t,a}$ for pulling arm $a$ at round $t$ for topic $i$ and the current topic $i$. It uses the topic $i$ to get a reference to the next topic $i+1$. Through the topic ${i+1}$ it gets content items $A^{i+1}_{t'}$ and context data $x^{i+1}_{c}$ associated those content items. After combining the contexts to prepare $X^{i+1}_{t'}$ 
+it gets the maximum expected payoff $p^{i+1}_{t',a'}$ and the arm $a^{i+1}_{t'}$ to pull by passing the context vector $X^{i+1}_{t'}$ and arms available for next topic $A^{i+1}_{t'}$. The expected payoff function returns an arm with the maximum estimated payoff. Skip topic function then calls the skip classifier to predict a skip-decision for the student context $\mathbf{x_s}$, along with the expected payoff from the current and the next topic to make a prediction.
+
+The \textit{EXPECTED-PAY0FF} function takes the context $X_t$, along with the arms $A_t$ available at round $t$. After an arm $a_t$ is initialized with parameters $A_a , b_a$ they are used to calculate the expected mean $\widehat{\theta}^{T}_{a}x_{t,a}$ and confidence bound $\sqrt{x^{T}_{t,a}A^{-1}_{a}x_{t,a}}$ for the arm. The confidence bound is scaled by $\alpha$. The expected mean and the scaled confidence bound are added to give the expected payoff $p_{t,a}$ for arm $a$ at round $t$. It then finds an arm $a$ with maximum expected payoff $p_{t,a}$ and returns the expected payoff along with the arm $a$ to be pulled. \par
+
+The \textit{PREDICT} function is used to predict whether the student should be moved to the next topic $i+1$ or should remain on the same topic $i$. It combines student context vector $\mathbf{x_s}$, the expected payoff $p^{i}_{t,a}$ for the current topic $i$ and the expected payoff $p^{i+1}_{t',a'}$ for the next topic $i+1$ to prepare a feature vector $X$. It then gets a prediction from the binary supervised online support vector classifier with hinge loss to make a prediction $Y$ and a confidence-score for it's prediction. If the confidence-score is less than the confidence threshold, then set the $decision$ variable is set to 0 which implies no skipping. This is because a confidence score lower than the threshold implies that the classifier is not sufficiently confident about it's prediction. \par
+
+The \textit{TRAIN} function is used to train the skip classifier to make better predictions. Similar to the predict function it combines student context vector $\mathbf{x_s}$, the expected payoff $p^{i}_{t,a}$ for the current topic $i$ and the expected payoff $p^{i+1}_{t',a'}$ for the next topic $i+1$ to prepare a feature vector $X$. It sets the $label$ to the output $Y$. Together they train the skip classifier. \par
+
+The \textit{SETLABEL} function is used to set the $label$ to train the skip classifier. If the reward $r_t$ for round $t$ is set to 0 then the $label$ is set to 1. This implies that since staying on the same topic did not give any reward, it would have been better to skip. If the reward $r_t$ for round $t$ is set to 1, then the $label$ is set to 0. This implies that staying on the same topic was a good decision. The set $label$ is then returned. \par
