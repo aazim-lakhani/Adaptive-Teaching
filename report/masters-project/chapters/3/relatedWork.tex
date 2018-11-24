@@ -1,0 +1,19 @@
+\startchapter{Related Work}
+\label{chapter:problem}
+
+Our use case could also be represented using a partially observed Markov decision process (POMDP) framework. POMDPs model the student's latent knowledge states and their transitions to learn a policy that will present an action that could maximize reward received over the long run (long-term learning outcome). Previous work applying POMDPs to personalized learning has had limited success. However, to create a personalized learning schedule using a POMDP can get complicated and intractable as the number of dimensions representing the states and actions grows. As a consequence of this curse of dimensionality, POMDPs have had a limited impact to personalize learning in large-scale applications which has a large number of students and learning actions \cite{lan2016contextual}. \par 
+
+A more practical and tractable approach to personalized learning is to learn a policy, which maps contexts to actions using the multi-armed bandit (MAB) framework, which is more suitable for our use case. This makes it more practical than the POMDP framework in large-scale educational applications \cite{lan2016contextual}. \par
+
+The work in \cite{liu2014trading} applies a MAB algorithm to educational games to find a trade-off between exploring learning resources to accurately estimate arm means, while also trying to maximize users test performance. Their approach is context-free and does not consider diversity among individual users. The work in \cite{mandel2014offline} collects data to find how students interact with the system to extract features as they play an educational game. It uses this knowledge to find a good teaching policy \cite{lan2016contextual}. \par 
+
+The work in \cite{lan2016contextual} is focused on adaptive testing to assess students performance. They use contextual MAB to find questions to assess a student. The question depends on a student's response to earlier questions. At each round, they have all questions to assess a student. Contrary to that we only have a restricted set of content items available at each round. Our use case is focused on adaptive teaching to enable students to learn. \par
+
+The works in \cite{clement2013multi,koedinger2013new} both uses expert knowledge to learn a teaching policy. The approach of \cite{clement2013multi}, in particular, uses domain expertize to reduce the set of possible actions a student can take. Our approach, in contrast, requires no expert knowledge and is fully data-driven \cite{lan2016contextual}. \par
+
+Other works typically create a model for each component, namely student, knowledge, domain and use knowledge tracing \cite{corbett1994knowledge}, item response theory and zone of proximal development \cite{lord2012applications,reckase2009multidimensional,bergner2012model} to make better decisions. These different methods have similar predictive performance. However, they could have very different teaching policies. \cite{lan2016contextual}. While these results are different approaches to make the best prediction, none of them use machine learning to develop a policy learning algorithm.\par
+
+\newlength{\savedunitlength}
+\setlength{\unitlength}{2em}
+
+\setlength{\unitlength}{\savedunitlength}
